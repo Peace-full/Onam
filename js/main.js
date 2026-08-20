@@ -3,6 +3,9 @@
 
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var desktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  var gsap = window.gsap;
+  var ST = window.ScrollTrigger;
+  var animated = !!(gsap && ST && !reduced);
   var SECS = Array.prototype.slice.call(document.querySelectorAll('[data-sec]'));
   var LABELS = ['home', 'legend', '10 days', 'pookalam', 'sadhya', 'culture', 'facts', 'thanks'];
   var AUTO_MS = 9000;      // time per section
@@ -15,6 +18,7 @@
   var prog = null;         // scroll progress bar
   var pxEls = null;        // parallax targets (.sticker img)
   var burstFired = false;
+  var finTl = null;        // finale replay timeline (built by initMotion)
 
   /* Natural (flow) top of each section, cached at init for nav targets. */
   var tops = [];
@@ -211,7 +215,7 @@
 
   /* ---------- petal burst (finale) ---------- */
   function petalBurst() {
-    var fin = document.querySelector('.sec.final');
+    var fin = document.querySelector('.sec.final .orbwrap') || document.querySelector('.sec.final');
     if (!fin) return;
     for (var i = 0; i < 40; i++) {
       var p = document.createElement('i');
@@ -225,6 +229,98 @@
       fin.appendChild(p);
       (function (el) { setTimeout(function () { el.remove(); }, 2600); })(p);
     }
+  }
+
+  /* ---------- motion layer (v11): hero intro, section reveals, orbs ---------- */
+  function initMotion() {
+    gsap.registerPlugin(ST);
+
+    /* hero entrance sequence */
+    var hero = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    hero
+      .from('.sec[data-n="00"] .kicker', { y: 26, opacity: 0, duration: .7 }, .1)
+      .from('.sec[data-n="00"] .hero-title .line-in', { yPercent: 112, duration: 1.15, ease: 'power4.out', stagger: .14 }, .25)
+      .from('.sec[data-n="00"] .hero-sub', { y: 28, opacity: 0, duration: .8 }, .9)
+      .from('.sec[data-n="00"] .hero-chips li', { y: 20, opacity: 0, duration: .55, ease: 'power2.out', stagger: .07 }, 1.15)
+      .from('.sec[data-n="00"] .cue', { opacity: 0, duration: .8 }, 1.5);
+
+    /* staggered section reveals (one pass) */
+    var revealSel = [
+      '.sec:not([data-n="00"]) .kicker',
+      '.sec:not([data-n="00"]) .h-display',
+      '.sec:not([data-n="00"]) .body-txt p',
+      '.sec:not([data-n="00"]) .pull',
+      '.sec:not([data-n="00"]) .chips li',
+      '.sec:not([data-n="00"]) .day',
+      '.sec:not([data-n="00"]) .fact',
+      '.sec:not([data-n="00"]) .card',
+      '.sec:not([data-n="00"]) .sticker'
+    ].join(',');
+    var revealEls = Array.prototype.slice.call(document.querySelectorAll(revealSel));
+    if (revealEls.length) {
+      gsap.set(revealEls, { y: 36, opacity: 0 });
+      ScrollTrigger.batch(revealEls, {
+        start: 'top 90%',
+        once: true,
+        onEnter: function (batch) {
+          gsap.to(batch, {
+            y: 0, opacity: 1, duration: .85, ease: 'power2.out', stagger: .08,
+            onComplete: function () {
+              batch.forEach(function (el) { gsap.set(el, { clearProps: 'transform,opacity' }); });
+            }
+          });
+        }
+      });
+    }
+
+    /* finale: end state pre-rendered; replay wired into the existing title observer */
+    var finSec = document.querySelector('.sec.final');
+    if (finSec) {
+      finTl = gsap.timeline({ paused: true, defaults: { ease: 'power4.out' } });
+      finTl
+        .fromTo('.final-title .line-in', { yPercent: 112 }, { yPercent: 0, duration: 1.2, stagger: .16 })
+        .fromTo('.final-sub', { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: .7, ease: 'power2.out' }, .55)
+        .fromTo('.final-bar', { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: 'power2.out' }, .75);
+      finTl.progress(1);
+    }
+
+    /* gold orbs drifting up through dark sections, green through light ones (clipped layer) */
+    var orbSecs = Array.prototype.slice.call(document.querySelectorAll('.sec:not([data-n="00"])'));
+    orbSecs.forEach(function (sec) {
+      var layer = document.createElement('div');
+      layer.className = 'orbwrap' + (sec.classList.contains('light') ? ' green' : '');
+      layer.setAttribute('aria-hidden', 'true');
+      sec.appendChild(layer);
+      var n = desktop ? 14 : 8;
+      for (var i = 0; i < n; i++) {
+        var p = document.createElement('i');
+        p.className = 'gp';
+        var sz = 3 + Math.random() * 5;
+        p.style.width = sz + 'px';
+        p.style.height = sz + 'px';
+        p.style.left = (Math.random() * 100).toFixed(2) + '%';
+        p.style.setProperty('--pd', (9 + Math.random() * 8).toFixed(2) + 's');
+        p.style.setProperty('--pdel', (Math.random() * 10).toFixed(2) + 's');
+        p.style.setProperty('--px', ((Math.random() * 2 - 1) * 60).toFixed(0) + 'px');
+        p.style.setProperty('--po', (0.25 + Math.random() * 0.4).toFixed(2));
+        layer.appendChild(p);
+      }
+    });
+
+    /* keep trigger positions honest after late-loading fonts/images */
+    var stBusy = false;
+    var refreshMotion = function () {
+      if (stBusy) return;
+      stBusy = true;
+      window.requestAnimationFrame(function () {
+        ST.refresh();
+        stBusy = false;
+      });
+    };
+    window.addEventListener('resize', refreshMotion, { passive: true });
+    window.addEventListener('orientationchange', refreshMotion, { passive: true });
+    window.addEventListener('load', refreshMotion, { passive: true });
+    ST.refresh();
   }
 
   /* ---------- events ---------- */
@@ -271,6 +367,7 @@
     var fio = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) {
         finTitle.classList.toggle('on', en.isIntersecting);
+        if (en.isIntersecting && finTl) finTl.progress(0).play();
         if (en.isIntersecting && !burstFired && !reduced) {
           burstFired = true;
           petalBurst();
@@ -285,6 +382,7 @@
   /* ---------- init ---------- */
   buildRail();
   buildMarquees();
+  if (animated) initMotion();
   var progEl = document.createElement('div');
   progEl.className = 'prog';
   progEl.setAttribute('aria-hidden', 'true');

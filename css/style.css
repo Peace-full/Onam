@@ -161,25 +161,6 @@ h1, h2, h3, p, small, blockquote, figcaption { overflow-wrap: break-word; }
   color: var(--cream);
 }
 
-/* ghost number */
-.sec[data-n]::after {
-  content: attr(data-n);
-  position: absolute;
-  right: -0.05em;
-  top: 2%;
-  font-family: var(--disp);
-  font-weight: 900;
-  font-size: clamp(8rem, 22vw, 20rem);
-  line-height: 1;
-  color: transparent;
-  -webkit-text-stroke: 1.5px currentColor;
-  opacity: .07;
-  pointer-events: none;
-  user-select: none;
-}
-.sec.light[data-n]::after { -webkit-text-stroke-color: var(--ink); }
-.sec.dark[data-n]::after { -webkit-text-stroke-color: var(--cream); }
-
 .wrap { width: 100%; max-width: 1240px; margin: 0 auto; position: relative; z-index: 2; }
 
 .grid.two {
@@ -527,7 +508,9 @@ body.on-dark .ctl:hover { border-color: var(--gold); color: var(--gold); }
 .rail {
   position: fixed;
   right: clamp(.9rem, 2.4vw, 2rem);
-  top: 50%; transform: translateY(-50%);
+  top: 50%;
+  top: 50svh;              /* v11: stable center (mobile URL bar no longer nudges it) */
+  transform: translateY(-50%);
   z-index: 900;
   display: flex; flex-direction: column; gap: .95rem;
   align-items: center;
@@ -704,4 +687,42 @@ body.no-auto .rail .ring { opacity: 0; }
   }
   .card .media { transition: transform .45s ease; }
   .card:hover .media { transform: scale(1.035); }
+}
+
+/* ============ v11: motion layer (text reveal masks + orbs) ============ */
+.hero-title .line, .final-title .line { will-change: transform; }
+.line-in { display: block; }
+
+/* orbs live in an overflow-clipped layer so nothing can ever create a
+   stray scrollbar inside a section (keeps .sec rules identical to v9) */
+.orbwrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.orbwrap.green .gp {
+  background: radial-gradient(circle, #CBEADF, var(--emerald) 70%, transparent);
+}
+.gp {
+  position: absolute;
+  bottom: -2vh;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #FFE9A8, var(--gold) 70%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: gp-rise var(--pd, 12s) linear infinite;
+  animation-delay: var(--pdel, 0s);
+}
+@keyframes gp-rise {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  8%   { opacity: var(--po, .5); }
+  85%  { opacity: var(--po, .5); }
+  100% { transform: translateY(-108vh) translateX(var(--px, 20px)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbwrap { display: none; }
+  .hero-title .line, .final-title .line { will-change: auto; }
 }
